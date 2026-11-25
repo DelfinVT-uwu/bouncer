@@ -470,15 +470,11 @@ proc merge*(a, b: Schema): Schema =
   result = a.clone()
   for k, v in b.shape: result.shape[k] = v.clone()
 
-proc schemaForType[T](t: typedesc[T]): Schema
-
-proc schemaForType[U](t: typedesc[Option[U]]): Schema =
-  schemaForType(U).optional()
-
-proc schemaForType[U](t: typedesc[seq[U]]): Schema =
-  arr(schemaForType(U))
-
 proc schemaForType[T](t: typedesc[T]): Schema =
+  # One generic, no typedesc overloads: older Nim (2.0) mis-resolves those. seq and
+  # Option are detected here, and their inner type pulled out with `typeof` (which
+  # only inspects the type, never runs the indexing/`get`). Option before object,
+  # since Option is itself an object.
   when T is string:
     result = str()
   elif T is bool:
@@ -487,6 +483,14 @@ proc schemaForType[T](t: typedesc[T]): Schema =
     result = number()
   elif T is SomeInteger:
     result = integer()
+  elif T is seq:
+    var probe: T
+    let inner: Schema = schemaForType(typeof(probe[0]))
+    result = arr(inner)
+  elif T is Option:
+    var probe: T
+    let inner: Schema = schemaForType(typeof(probe.get))
+    result = optional(inner)
   elif T is object:
     result = Schema(kind: skObject)
     result.shape = initOrderedTable[string, Schema]()
