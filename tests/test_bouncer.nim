@@ -168,6 +168,11 @@ suite "more validators":
     check str().nonEmpty().safeParse(%"").hasLine("at least 1")
     check arr(integer()).nonEmpty().safeParse("[]").hasLine("at least 1")
 
+  test "pattern: a custom regex":
+    let code = str().pattern(r"^\d{3}-\d{4}$")
+    check code.safeParse(%"123-4567").ok
+    check code.safeParse(%"nope").hasLine("match the required pattern")
+
 suite "literals and unions":
   test "literal matches one exact value":
     check literal("admin").safeParse(%"admin").ok

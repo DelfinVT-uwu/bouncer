@@ -7,17 +7,22 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04   # std/re needs libpcre3, which 24.04 dropped
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
         nim: ['2.0.x', 'stable']
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: jiro4989/setup-nim-action@v2
         with:
           nim-version: ${{ matrix.nim }}
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-      # std/re loads libpcre at runtime; make sure it's there.
-      - run: sudo apt-get update && sudo apt-get install -y libpcre3
+      # pattern() leans on std/re, which loads libpcre at runtime. Linux and macOS
+      # need it installed; the Windows Nim ships the pcre DLLs itself.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libpcre3
+      - if: runner.os == 'macOS'
+        run: brew install pcre
       - run: nimble test -Y
