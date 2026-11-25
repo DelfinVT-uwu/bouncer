@@ -1,5 +1,7 @@
 # bouncer
 
+![tests](https://github.com/DelfinVT-uwu/bouncer/actions/workflows/tests.yml/badge.svg)
+
 Schema validation for Nim, in the style of [Zod](https://zod.dev). Describe the shape
 your data should have, then run untrusted input — a JSON body, a form, a config file —
 through it. You get back the data cleaned up, or every reason it failed and where.
