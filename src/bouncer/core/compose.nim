@@ -7,6 +7,7 @@ proc clone(s: Schema): Schema =
   of skString:
     result = Schema(kind: skString, minLen: s.minLen, maxLen: s.maxLen,
                     isEmail: s.isEmail, isUrl: s.isUrl, isUuid: s.isUuid,
+                    isDate: s.isDate, isDatetime: s.isDatetime,
                     doTrim: s.doTrim, pattern: s.pattern, enumVals: s.enumVals)
   of skInt:
     result = Schema(kind: skInt, imin: s.imin, imax: s.imax,
@@ -22,6 +23,11 @@ proc clone(s: Schema): Schema =
     for k, v in s.shape: result.shape[k] = v.clone()
   of skArray:
     result = Schema(kind: skArray, elem: s.elem.clone(), amin: s.amin, amax: s.amax)
+  of skLiteral:
+    result = Schema(kind: skLiteral, litVal: s.litVal)
+  of skUnion:
+    result = Schema(kind: skUnion)
+    for v in s.variants: result.variants.add v.clone()
   result.optional = s.optional
   result.coerceInput = s.coerceInput
   result.defaultVal = s.defaultVal

@@ -29,7 +29,7 @@ type
   Transform = proc (node: JsonNode): JsonNode {.closure.}
 
   SchemaKind = enum
-    skString, skInt, skFloat, skBool, skObject, skArray
+    skString, skInt, skFloat, skBool, skObject, skArray, skLiteral, skUnion
 
   Schema* = ref object
     optional: bool
@@ -40,7 +40,7 @@ type
     case kind: SchemaKind
     of skString:
       minLen, maxLen: Option[int]
-      isEmail, isUrl, isUuid, doTrim: bool
+      isEmail, isUrl, isUuid, isDate, isDatetime, doTrim: bool
       pattern: Option[Regex]
       enumVals: seq[string]
     of skInt:
@@ -57,6 +57,10 @@ type
     of skArray:
       elem: Schema
       amin, amax: Option[int]
+    of skLiteral:
+      litVal: JsonNode
+    of skUnion:
+      variants: seq[Schema]
 
   BouncerError* = object of CatchableError
     issues*: seq[Issue]
@@ -74,6 +78,8 @@ func typeLabel(k: SchemaKind): string =
   of skBool:   "boolean"
   of skObject: "object"
   of skArray:  "array"
+  of skLiteral: "value"
+  of skUnion:  "value"
 
 func jsonLabel(n: JsonNode): string =
   if n.isNil: return "null"
@@ -103,6 +109,41 @@ func looksLikeEmail(s: string): bool =
 
 func looksLikeUrl(s: string): bool =
   (s.startsWith("http://") or s.startsWith("https://")) and '.' in s and s.len > 11
+
+func looksLikeDate(s: string): bool =
+  # Calendar date, YYYY-MM-DD. Hand-rolled so a date check needs no regex engine.
+  # Ranges only, not a real calendar — 2025-02-31 passes, like Zod's own regex.
+  if s.len != 10 or s[4] != '-' or s[7] != '-': return false
+  for i, c in s:
+    if i == 4 or i == 7: continue
+    if c notin {'0'..'9'}: return false
+  parseInt(s[5..6]) in 1..12 and parseInt(s[8..9]) in 1..31
+
+func looksLikeDatetime(s: string): bool =
+  # A pragmatic subset of ISO 8601: a date, then `T`, then HH:MM:SS, then an
+  # optional fractional part and an optional `Z` or ±HH:MM offset.
+  if s.len < 19 or s[10] != 'T': return false
+  if not looksLikeDate(s[0..9]): return false
+  let t = s[11..18]
+  if t[2] != ':' or t[5] != ':': return false
+  for i, c in t:
+    if i == 2 or i == 5: continue
+    if c notin {'0'..'9'}: return false
+  if parseInt(t[0..1]) > 23 or parseInt(t[3..4]) > 59 or parseInt(t[6..7]) > 59:
+    return false
+  var rest = s[19..^1]
+  if rest.len > 0 and rest[0] == '.':
+    var i = 1
+    while i < rest.len and rest[i] in {'0'..'9'}: inc i
+    if i == 1: return false           # a dot with no digits after it
+    rest = rest[i..^1]
+  if rest.len == 0 or rest == "Z": return true
+  if rest.len == 6 and rest[0] in {'+', '-'} and rest[3] == ':':
+    for i, c in rest:
+      if i == 0 or i == 3: continue
+      if c notin {'0'..'9'}: return false
+    return true
+  false
 
 func looksLikeUuid(s: string): bool =
   # 8-4-4-4-12 hex digits with hyphens. Hand-rolled so a UUID check needs no regex engine.

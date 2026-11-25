@@ -24,8 +24,9 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
   var node = s.coerced(input)
 
   # Missing or null is fine when optional, a type error otherwise. Objects handle
-  # their own missing fields (default / omit) before they ever call this.
-  if node.isNil or node.kind == JNull:
+  # their own missing fields (default / omit) before they ever call this. Union and
+  # literal decide for themselves what null means, so they skip this.
+  if s.kind notin {skUnion, skLiteral} and (node.isNil or node.kind == JNull):
     if not s.optional:
       issues.add issue(path, icInvalidType, "expected " & typeLabel(s.kind) & ", got null")
     return (issues, node)
@@ -46,6 +47,10 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
       issues.add issue(path, icInvalidString, "must be a valid URL")
     if s.isUuid and not looksLikeUuid(v):
       issues.add issue(path, icInvalidString, "must be a valid UUID")
+    if s.isDate and not looksLikeDate(v):
+      issues.add issue(path, icInvalidString, "must be a valid date (YYYY-MM-DD)")
+    if s.isDatetime and not looksLikeDatetime(v):
+      issues.add issue(path, icInvalidString, "must be a valid ISO 8601 date-time")
     if s.pattern.isSome and not v.contains(s.pattern.get):
       issues.add issue(path, icInvalidString, "does not match the required pattern")
     if s.enumVals.len > 0 and v notin s.enumVals:
@@ -124,6 +129,25 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
       issues.add childIssues
       cleaned.add childValue
     node = cleaned
+
+  of skLiteral:
+    if node != s.litVal:
+      return (@[issue(path, icInvalidType, "must be " & $s.litVal)], node)
+
+  of skUnion:
+    if s.optional and (node.isNil or node.kind == JNull):
+      discard                                   # an optional union lets null through
+    else:
+      var matched = false
+      for v in s.variants:
+        let (vIssues, vValue) = run(v, input, path)
+        if vIssues.len == 0:
+          node = vValue                         # keep the winning branch's clean value
+          matched = true
+          break
+      if not matched:
+        return (@[issue(path, icInvalidType,
+          "did not match any of the " & $s.variants.len & " allowed types")], node)
 
   # Custom rules and transforms run only once the value is otherwise valid, so a
   # refinement never has to re-check the type it was handed.

@@ -66,14 +66,17 @@ query.parse("""{"page":"2","term":"  nim ","junk":"x"}""")
 ```nim
 # scalars
 str()      .min(n) .max(n) .nonEmpty() .trim()
-           .email() .url() .uuid() .pattern(r"…") .oneOf(["a", "b"])
+           .email() .url() .uuid() .date() .datetime()
+           .pattern(r"…") .oneOf(["a", "b"])
 integer()  .min(n) .max(n) .positive() .nonNegative() .coerce()
 number()   .min(x) .max(x) .positive() .nonNegative() .coerce()   # int or float
 boolean()  .coerce()
+literal(v)                          # one exact value: a string, number or bool
 
 # composites
 obj({ "k": str(), … })              # add strict = true to reject unknown keys
 arr(str())  .min(n) .max(n) .nonEmpty()
+union(a, b, …)                      # matches if any variant does
 
 # on any schema
 .optional()                         # value may be missing or null
@@ -117,6 +120,26 @@ let signup = user.pick(["name", "password"])
 user or ship it as an API response. Errors are collected, not fail-fast: one parse reports
 everything that's wrong.
 
+## One of several shapes
+
+When a value can be more than one thing, list the options with `union`. It tries each
+in turn and keeps the first that passes — so the branch that matched is also the one
+that cleans the value:
+
+```nim
+let id = union(integer(), str().uuid())   # a numeric id or a UUID string
+```
+
+Tag each object variant with a `literal` field and you have a discriminated union — the
+shape depends on a `kind`, the way an event or a message does:
+
+```nim
+let event = union(
+  obj({ "kind": literal("click"), "x": integer(), "y": integer() }),
+  obj({ "kind": literal("key"),   "code": str() })
+)
+```
+
 ## From a Nim type
 
 Already have a type? Derive the schema from it, or validate and deserialize in one step:
@@ -144,7 +167,8 @@ paths) and hands back a typed value.
 
 ## Not here yet
 
-Unions, dates, and attaching rules through type pragmas — maybe later.
+Intersections, a real `Date` output type, and attaching rules through type pragmas —
+maybe later.
 
 ## License
 

@@ -168,6 +168,50 @@ suite "more validators":
     check str().nonEmpty().safeParse(%"").hasLine("at least 1")
     check arr(integer()).nonEmpty().safeParse("[]").hasLine("at least 1")
 
+suite "literals and unions":
+  test "literal matches one exact value":
+    check literal("admin").safeParse(%"admin").ok
+    check literal("admin").safeParse(%"user").hasLine("must be")
+    check literal(42).safeParse(%42).ok
+    check literal(true).safeParse(%false).hasLine("must be")
+
+  test "union passes if any variant does":
+    let id = union(integer(), str().uuid())
+    check id.safeParse(%7).ok
+    check id.safeParse(%"550e8400-e29b-41d4-a716-446655440000").ok
+    check id.safeParse(%"nope").hasLine("did not match any")
+
+  test "union hands back the winning branch's cleaned value":
+    let s = union(integer().coerce(), boolean())
+    check s.safeParse(%"42").value.getInt == 42     # the int branch coerced it
+
+  test "discriminated-union style with a literal tag":
+    let event = union(
+      obj({"kind": literal("click"), "x": integer(), "y": integer()}),
+      obj({"kind": literal("key"),   "code": str()})
+    )
+    check event.safeParse("""{"kind":"click","x":1,"y":2}""").ok
+    check event.safeParse("""{"kind":"key","code":"Esc"}""").ok
+    check not event.safeParse("""{"kind":"scroll"}""").ok
+
+  test "optional union lets null through":
+    let s = obj({"note": union(str(), integer()).optional()})
+    check s.safeParse("""{"note":null}""").ok
+    check s.safeParse("{}").ok
+
+suite "dates":
+  test "date wants YYYY-MM-DD":
+    check str().date().safeParse(%"2025-11-25").ok
+    check str().date().safeParse(%"2025-13-01").hasLine("valid date")
+    check str().date().safeParse(%"25-11-2025").hasLine("valid date")
+
+  test "datetime accepts an ISO 8601 timestamp":
+    check str().datetime().safeParse(%"2025-11-25T14:30:00Z").ok
+    check str().datetime().safeParse(%"2025-11-25T14:30:00").ok
+    check str().datetime().safeParse(%"2025-11-25T14:30:00.500+02:00").ok
+    check str().datetime().safeParse(%"2025-11-25 14:30").hasLine("ISO 8601")
+    check str().datetime().safeParse(%"2025-11-25T25:00:00").hasLine("ISO 8601")
+
 suite "composition":
   let base = obj({
     "id":    integer(),

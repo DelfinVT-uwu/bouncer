@@ -12,6 +12,18 @@ func obj*(shape: openArray[(string, Schema)], strict = false): Schema =
   result.shape = initOrderedTable[string, Schema]()
   for (k, v) in shape: result.shape[k] = v
 
+func literal*(value: JsonNode): Schema = Schema(kind: skLiteral, litVal: value)
+func literal*(value: string): Schema = literal(%value)
+func literal*(value: int): Schema = literal(%value)
+func literal*(value: float): Schema = literal(%value)
+func literal*(value: bool): Schema = literal(%value)
+
+func union*(variants: varargs[Schema]): Schema =
+  ## Match if any one of the variants does. The first that passes wins, and its
+  ## cleaned-up value is what you get back. Put a `literal()` field in each object
+  ## variant to tag it, the way you'd write a discriminated union.
+  Schema(kind: skUnion, variants: @variants)
+
 proc optional*(s: Schema): Schema =
   s.optional = true; s
 
@@ -94,6 +106,16 @@ proc url*(s: Schema): Schema =
 proc uuid*(s: Schema): Schema =
   doAssert s.kind == skString, "uuid() only applies to str()"
   s.isUuid = true; s
+
+proc date*(s: Schema): Schema =
+  ## Require a calendar date in `YYYY-MM-DD` form.
+  doAssert s.kind == skString, "date() only applies to str()"
+  s.isDate = true; s
+
+proc datetime*(s: Schema): Schema =
+  ## Require an ISO 8601 date-time, e.g. `2025-11-25T14:30:00Z`.
+  doAssert s.kind == skString, "datetime() only applies to str()"
+  s.isDatetime = true; s
 
 proc trim*(s: Schema): Schema =
   doAssert s.kind == skString, "trim() only applies to str()"
