@@ -35,7 +35,7 @@ validate data you don't have a type for — the cases a type annotation can't co
 ## Install
 
 ```
-nimble install bouncer
+nimble install https://github.com/DelfinVT-uwu/bouncer
 ```
 
 Nim 2.0+, no external dependencies.
