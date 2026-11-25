@@ -89,7 +89,7 @@ everything that's wrong.
 ## Not here yet
 
 No schema composition helpers (`partial`/`pick`/`omit`), and no macro to derive a schema
-from a Nim `object` type. See [docs/DESIGN.md](docs/DESIGN.md) for where it's headed.
+from a Nim `object` type — maybe next.
 
 ## License
 
