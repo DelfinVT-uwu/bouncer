@@ -43,7 +43,7 @@ validate data you don't have a type for — the cases a type annotation can't co
 nimble install bouncer
 ```
 
-Nim 2.0+, no external dependencies.
+Nim 2.0+, no Nimble dependencies. Tested on Linux, macOS and Windows.
 
 ## Cleaning up on the way through
 
@@ -76,6 +76,7 @@ literal(v)                          # one exact value: a string, number or bool
 # composites
 obj({ "k": str(), … })              # add strict = true to reject unknown keys
 arr(str())  .min(n) .max(n) .nonEmpty()
+record(str())                       # object with arbitrary keys, all values str()
 union(a, b, …)                      # matches if any variant does
 
 # on any schema

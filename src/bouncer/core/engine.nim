@@ -141,6 +141,18 @@ proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], Json
       cleaned.add childValue
     node = cleaned
 
+  of skRecord:
+    if node.kind != JObject:
+      return (@[issue(path, icInvalidType, "expected object, got " & jsonLabel(node))], node)
+    var cleaned = newJObject()
+    for name, val in node:
+      path.add key(name)
+      let (childIssues, childValue) = run(s.valueSchema, val, path)
+      path.setLen(path.len - 1)
+      issues.add childIssues
+      cleaned[name] = childValue
+    node = cleaned
+
   of skLiteral:
     if node != s.litVal:
       return (@[issue(path, icInvalidType, "must be " & $s.litVal)], node)

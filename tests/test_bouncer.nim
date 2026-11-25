@@ -204,6 +204,28 @@ suite "literals and unions":
     check s.safeParse("""{"note":null}""").ok
     check s.safeParse("{}").ok
 
+suite "records":
+  test "a map of string keys to one value schema":
+    let scores = record(integer().min(0))
+    check scores.safeParse("""{"alice":10,"bob":0}""").ok
+    let r = scores.safeParse("""{"alice":10,"bob":-1}""")
+    check r.hasLine("bob: must be >= 0")
+
+  test "the value type is enforced, with the key in the path":
+    let r = record(str()).safeParse("""{"a":"ok","b":2}""")
+    check r.hasLine("b: expected string, got integer")
+
+  test "values come back cleaned":
+    let r = record(integer().coerce()).safeParse("""{"a":"1","b":"2"}""")
+    check r.value["a"].getInt == 1
+    check r.value["b"].getInt == 2
+
+  test "an empty map is fine":
+    check record(str()).safeParse("{}").ok
+
+  test "not an object is reported":
+    check record(str()).safeParse("""[1,2]""").hasLine("expected object, got array")
+
 suite "dates":
   test "date wants YYYY-MM-DD":
     check str().date().safeParse(%"2025-11-25").ok

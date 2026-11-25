@@ -18,6 +18,12 @@ func literal*(value: int): Schema = literal(%value)
 func literal*(value: float): Schema = literal(%value)
 func literal*(value: bool): Schema = literal(%value)
 
+func record*(valueSchema: Schema): Schema =
+  ## An object with arbitrary string keys whose values all share one schema —
+  ## a map, like `{"es": "Hola", "en": "Hi"}`. Use it when the keys aren't known
+  ## ahead of time; use `obj()` when they are.
+  Schema(kind: skRecord, valueSchema: valueSchema)
+
 func union*(variants: varargs[Schema]): Schema =
   ## Match if any one of the variants does. The first that passes wins, and its
   ## cleaned-up value is what you get back. Put a `literal()` field in each object

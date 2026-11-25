@@ -28,6 +28,8 @@ proc clone(s: Schema): Schema =
   of skUnion:
     result = Schema(kind: skUnion)
     for v in s.variants: result.variants.add v.clone()
+  of skRecord:
+    result = Schema(kind: skRecord, valueSchema: s.valueSchema.clone())
   result.optional = s.optional
   result.coerceInput = s.coerceInput
   result.defaultVal = s.defaultVal
