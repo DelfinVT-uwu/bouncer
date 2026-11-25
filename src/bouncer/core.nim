@@ -69,8 +69,6 @@ type
     of true:  value*: JsonNode
     of false: issues*: seq[Issue]
 
-let uuidShape = re"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-
 func typeLabel(k: SchemaKind): string =
   case k
   of skString: "string"
@@ -108,6 +106,16 @@ func looksLikeEmail(s: string): bool =
 
 func looksLikeUrl(s: string): bool =
   (s.startsWith("http://") or s.startsWith("https://")) and '.' in s and s.len > 11
+
+func looksLikeUuid(s: string): bool =
+  # 8-4-4-4-12 hex digits with hyphens. Hand-rolled so a UUID check needs no regex engine.
+  if s.len != 36: return false
+  for i, c in s:
+    if i == 8 or i == 13 or i == 18 or i == 23:
+      if c != '-': return false
+    elif c notin HexDigits:
+      return false
+  true
 
 func pathString*(path: seq[PathPart]): string =
   ## "user.email", "items[2].name", "" at the root.
@@ -165,7 +173,7 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
       issues.add issue(path, icInvalidString, "must be a valid email")
     if s.isUrl and not looksLikeUrl(v):
       issues.add issue(path, icInvalidString, "must be a valid URL")
-    if s.isUuid and not v.contains(uuidShape):
+    if s.isUuid and not looksLikeUuid(v):
       issues.add issue(path, icInvalidString, "must be a valid UUID")
     if s.pattern.isSome and not v.contains(s.pattern.get):
       issues.add issue(path, icInvalidString, "does not match the required pattern")
