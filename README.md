@@ -1,9 +1,8 @@
 # bouncer
 
-Schema validation for Nim, in the style of [Zod](https://zod.dev). You describe the
-shape your data should have, then hand it untrusted input — a JSON body, a form, a
-config file. You get back either the clean, validated data or a list of exactly what
-was wrong and where.
+Schema validation for Nim, in the style of [Zod](https://zod.dev). Describe the shape
+your data should have, then run untrusted input — a JSON body, a form, a config file —
+through it. You get back the validated data, or every reason it failed and where.
 
 ```nim
 import bouncer
@@ -11,8 +10,7 @@ import bouncer
 let user = obj({
   "name":  str().min(3).max(50),
   "email": str().email(),
-  "age":   integer().min(18),
-  "tags":  arr(str()).optional()
+  "age":   integer().min(18)
 })
 
 let r = user.safeParse("""{"name":"Al","email":"nope","age":15}""")
@@ -24,19 +22,15 @@ if not r.ok:
 # age: must be >= 18
 ```
 
-No exceptions on the happy path, no half-parsed structs, no guessing which field broke.
-
 ## Why
 
-Static types describe the data you *expect*. They say nothing about the data that
-actually arrives from a network, a user, or a file — that data is untrusted until
-something checks it. `bouncer` is that check: parse it into a shape you trust, or find
-out precisely why you can't.
+External data — off a network, from a user, out of a file — is untrusted until something
+checks it. `bouncer` is that check: it turns unknown input into data you can rely on, or
+tells you exactly what's wrong, field by field.
 
-Nim already has a few validators built on field pragmas. `bouncer` takes the other,
-Zod-shaped route: a **schema is a value**. That means you can build schemas at runtime,
-compose and reuse them, pass them around, and validate data you don't have a static
-type for — the things real apps need that a type annotation can't give you.
+Nim's other validators annotate a static type with pragmas. `bouncer` takes Zod's route:
+a schema is a value. You can build schemas at runtime, compose and reuse them, and
+validate data you don't have a type for — the cases a type annotation can't cover.
 
 ## Install
 
@@ -44,71 +38,40 @@ type for — the things real apps need that a type annotation can't give you.
 nimble install bouncer
 ```
 
-Requires Nim 2.0+. No external dependencies.
+Nim 2.0+, no external dependencies.
 
-## The pieces
-
-**Scalars**
+## API
 
 ```nim
-str()                       # a string
-  .min(n) .max(n)           #   length bounds
-  .email()                  #   looks like an email
-  .pattern(r"^\d{4}$")      #   matches a regex (std/re)
-  .oneOf(["a", "b"])        #   one of a fixed set
-
-integer()  .min(n) .max(n)  # a whole number
-number()   .min(x) .max(x)  # int or float
+# scalars
+str()      .min(n) .max(n) .email() .pattern(r"…") .oneOf(["a", "b"])
+integer()  .min(n) .max(n)
+number()   .min(x) .max(x)          # int or float
 boolean()
+
+# composites
+obj({ "k": str(), … })              # add strict = true to reject unknown keys
+arr(str())  .min(n) .max(n)
+
+# modifiers, on any schema
+.optional()                         # value may be missing or null
+.refine(proc(n: JsonNode): bool … , "message")
+
+# running it
+schema.safeParse(node | text)       # never raises; returns ParseResult
+schema.parse(node | text)           # returns data, or raises BouncerError
 ```
 
-**Composites**
+`ParseResult.ok` says which path you got: read `.value` or `.issues`. Each `Issue` has a
+`path`, a stable `code` (`icTooSmall`, `icRequired`, …) and a message — render it for a
+user or ship it as an API response. Errors are collected, not fail-fast: one parse reports
+everything that's wrong.
 
-```nim
-obj({ "k": str(), ... })          # an object; add `strict = true` to reject unknown keys
-obj({...}, strict = true)
-arr(str())  .min(n) .max(n)       # an array; element schema + length bounds
-```
+## Not here yet
 
-**Modifiers (chain them on anything)**
-
-```nim
-schema.optional()                 # the value may be missing or null
-schema.refine(check, "message")   # your own rule: proc(n: JsonNode): bool
-```
-
-**Running a schema**
-
-```nim
-schema.safeParse(node)     # JsonNode  -> ParseResult, never raises
-schema.safeParse(text)     # JSON text -> ParseResult (bad JSON becomes an issue)
-schema.parse(node)         # returns the data, or raises BouncerError with .issues
-```
-
-`ParseResult` is a small variant: `r.ok` is a `bool`; when true read `r.value`, when
-false read `r.issues`. Every `Issue` carries a `path`, a stable `code`
-(`icTooSmall`, `icInvalidType`, `icRequired`, …) and a human message, so you can render
-it for a user or shape it into an API response:
-
-```nim
-for issue in r.issues:
-  echo issue.code, " @ ", pathString(issue.path), " -> ", issue.message
-```
-
-Errors are collected, not fail-fast — one parse tells you everything that's wrong.
-
-## What it doesn't do (yet)
-
-Honest about the edges: there's no coercion/`transform` (string→int, trimming), no schema
-composition helpers (`partial`/`pick`/`omit`), and no macro to derive a schema from a Nim
-`object` type. Those are on the roadmap in [docs/DESIGN.md](docs/DESIGN.md). What's here
-is v0.1: the validation core, solid and tested.
-
-## Develop
-
-```
-nimble test
-```
+No coercion (`transform`), no composition helpers (`partial`/`pick`/`omit`), and no macro
+to derive a schema from a Nim `object`. See [docs/DESIGN.md](docs/DESIGN.md). This is v0.1:
+the validation core, tested.
 
 ## License
 
