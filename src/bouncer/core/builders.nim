@@ -22,6 +22,7 @@ func union*(variants: varargs[Schema]): Schema =
   ## Match if any one of the variants does. The first that passes wins, and its
   ## cleaned-up value is what you get back. Put a `literal()` field in each object
   ## variant to tag it, the way you'd write a discriminated union.
+  doAssert variants.len > 0, "union() needs at least one variant"
   Schema(kind: skUnion, variants: @variants)
 
 proc optional*(s: Schema): Schema =

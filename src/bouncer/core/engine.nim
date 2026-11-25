@@ -19,7 +19,10 @@ proc coerced(s: Schema, node: JsonNode): JsonNode =
     else: node
   else: node
 
-proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode) =
+proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], JsonNode) =
+  # `path` is one buffer shared down the whole walk: each level pushes its key or
+  # index, recurses, then pops. We only ever copy it when an issue is actually made
+  # (issue() snapshots it), so a valid parse builds no paths at all.
   var issues: seq[Issue]
   var node = s.coerced(input)
 
@@ -55,7 +58,7 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
       issues.add issue(path, icInvalidString, "does not match the required pattern")
     if s.enumVals.len > 0 and v notin s.enumVals:
       issues.add issue(path, icInvalidEnum, "must be one of: " & s.enumVals.join(", "))
-    node = newJString(v)
+    if s.doTrim: node = newJString(v)   # only rebuild when trim actually changed it
 
   of skInt:
     var v: int
@@ -103,17 +106,23 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
     var cleaned = newJObject()
     for name, sub in s.shape:
       if node.hasKey(name) and node[name].kind != JNull:
-        let (childIssues, childValue) = run(sub, node[name], path & key(name))
+        path.add key(name)
+        let (childIssues, childValue) = run(sub, node[name], path)
+        path.setLen(path.len - 1)
         issues.add childIssues
         cleaned[name] = childValue
       elif sub.defaultVal.isSome:
         cleaned[name] = sub.defaultVal.get
       elif not sub.optional:
-        issues.add issue(path & key(name), icRequired, "required")
+        path.add key(name)
+        issues.add issue(path, icRequired, "required")
+        path.setLen(path.len - 1)
     if s.strict:
       for name, _ in node:
         if name notin s.shape:
-          issues.add issue(path & key(name), icUnrecognized, "unexpected key")
+          path.add key(name)
+          issues.add issue(path, icUnrecognized, "unexpected key")
+          path.setLen(path.len - 1)
     node = cleaned  # unknown keys are dropped from the output
 
   of skArray:
@@ -125,7 +134,9 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
       issues.add issue(path, icTooBig, "must have at most " & $s.amax.get & " items")
     var cleaned = newJArray()
     for i, el in node.getElems:
-      let (childIssues, childValue) = run(s.elem, el, path & idx(i))
+      path.add idx(i)
+      let (childIssues, childValue) = run(s.elem, el, path)
+      path.setLen(path.len - 1)
       issues.add childIssues
       cleaned.add childValue
     node = cleaned
@@ -164,7 +175,8 @@ proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode
 proc safeParse*(s: Schema, node: JsonNode): ParseResult =
   ## Validate `node`. Never raises; check `.ok`, then read `.value` (cleaned up:
   ## trimmed, coerced, unknown keys dropped) or `.issues`.
-  let (issues, value) = s.run(node, @[])
+  var path: seq[PathPart] = @[]
+  let (issues, value) = s.run(node, path)
   if issues.len == 0: ParseResult(ok: true, value: value)
   else: ParseResult(ok: false, issues: issues)
 

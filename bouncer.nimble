@@ -1,4 +1,4 @@
-version     = "0.3.0"
+version     = "0.3.1"
 author      = "DelfinVT"
 description = "Zod-style schema validation and parsing for untrusted data in Nim"
 license     = "MIT"
