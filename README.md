@@ -1,6 +1,8 @@
 # bouncer
 
 ![tests](https://github.com/DelfinVT-uwu/bouncer/actions/workflows/tests.yml/badge.svg)
+![Nim](https://img.shields.io/badge/Nim-2.0%2B-f3d400.svg)
+![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
 Schema validation for Nim, in the style of [Zod](https://zod.dev). Describe the shape
 your data should have, then run untrusted input — a JSON body, a form, a config file —
