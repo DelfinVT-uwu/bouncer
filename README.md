@@ -1,6 +1,7 @@
 # bouncer
 
 ![tests](https://github.com/DelfinVT-uwu/bouncer/actions/workflows/tests.yml/badge.svg)
+![nimble](https://img.shields.io/nimble/v/bouncer)
 ![Nim](https://img.shields.io/badge/Nim-2.0%2B-f3d400.svg)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
@@ -39,7 +40,7 @@ validate data you don't have a type for — the cases a type annotation can't co
 ## Install
 
 ```
-nimble install https://github.com/DelfinVT-uwu/bouncer
+nimble install bouncer
 ```
 
 Nim 2.0+, no external dependencies.
