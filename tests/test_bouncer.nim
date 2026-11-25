@@ -168,6 +168,39 @@ suite "more validators":
     check str().nonEmpty().safeParse(%"").hasLine("at least 1")
     check arr(integer()).nonEmpty().safeParse("[]").hasLine("at least 1")
 
+suite "composition":
+  let base = obj({
+    "id":    integer(),
+    "name":  str().min(1),
+    "email": str().email()
+  })
+
+  test "partial makes every field optional":
+    check base.partial().safeParse("{}").ok
+
+  test "deriving never mutates the original":
+    discard base.partial()
+    check base.safeParse("{}").issues.len == 3   # id, name, email still required
+
+  test "pick keeps only the named fields":
+    let p = base.pick(["id", "name"])
+    check p.safeParse("""{"id":1,"name":"a"}""").ok
+    check not p.safeParse("""{"id":1,"name":"a"}""").value.hasKey("email")
+
+  test "omit drops the named fields":
+    check base.omit(["email"]).safeParse("""{"id":1,"name":"a"}""").ok
+
+  test "extend adds or overrides fields":
+    let e = base.extend({"age": integer().min(18)})
+    check e.safeParse("""{"id":1,"name":"a","email":"a@b.com","age":20}""").ok
+    check e.safeParse("""{"id":1,"name":"a","email":"a@b.com","age":10}""").hasLine("age: must be >= 18")
+
+  test "merge combines two schemas, second wins on a clash":
+    let m = merge(obj({"a": integer(), "shared": str()}),
+                  obj({"b": boolean(), "shared": integer()}))
+    check m.safeParse("""{"a":1,"b":true,"shared":9}""").ok
+    check m.safeParse("""{"a":1,"b":true,"shared":"x"}""").hasLine("shared: expected integer")
+
 suite "rendering":
   test "path string formats keys and indices":
     let r = arr(obj({"tags": arr(str())})).safeParse("""[{"tags":["ok", 3]}]""")

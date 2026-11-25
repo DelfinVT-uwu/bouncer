@@ -76,9 +76,31 @@ arr(str())  .min(n) .max(n) .nonEmpty()
 .refine(proc(n: JsonNode): bool … , "message")
 .transform(proc(n: JsonNode): JsonNode … )   # reshape after it validates
 
+# deriving object schemas (returns a new schema; the original is untouched)
+.partial()                          # every field optional
+.pick(["id", "name"])  .omit(["password"])
+.extend({ "age": integer() })       merge(schemaA, schemaB)
+
 # running it
 schema.safeParse(node | text)       # never raises; returns ParseResult
 schema.parse(node | text)           # returns the cleaned value, or raises BouncerError
+```
+
+## Deriving one schema from another
+
+Define a schema once, then carve the variants you need from it — without touching the
+original:
+
+```nim
+let user = obj({
+  "id":       integer(),
+  "name":     str().min(1),
+  "password": str().min(8)
+})
+
+let public = user.omit(["password"])   # what you send back to clients
+let update = user.partial()            # a PATCH body: every field optional
+let signup = user.pick(["name", "password"])
 ```
 
 `ParseResult.ok` says which path you got: read `.value` or `.issues`. Each `Issue` has a
@@ -88,8 +110,7 @@ everything that's wrong.
 
 ## Not here yet
 
-No schema composition helpers (`partial`/`pick`/`omit`), and no macro to derive a schema
-from a Nim `object` type — maybe next.
+No macro to derive a schema from a Nim `object` type — maybe next.
 
 ## License
 
