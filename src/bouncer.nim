@@ -4,8 +4,8 @@
 ## against it. You get back the cleaned-up data or a list of issues, each with the
 ## exact path where it failed.
 ##
-## `std/json` is re-exported, so `import bouncer` alone gives you `%`, `getInt`,
-## `JsonNode` and friends.
+## `std/json` and `std/options` are re-exported, so `import bouncer` alone gives you
+## `%`, `getInt`, `JsonNode`, `Option`, `some`/`none` and friends.
 ##
 ## ```nim
 ## import bouncer
@@ -25,6 +25,6 @@
 ##                       # age: must be >= 18
 ## ```
 
-import std/json
+import std/[json, options]
 import bouncer/core
-export json, core
+export json, options, core

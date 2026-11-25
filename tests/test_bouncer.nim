@@ -201,6 +201,48 @@ suite "composition":
     check m.safeParse("""{"a":1,"b":true,"shared":9}""").ok
     check m.safeParse("""{"a":1,"b":true,"shared":"x"}""").hasLine("shared: expected integer")
 
+suite "schema from a Nim type":
+  type
+    Address = object
+      city: string
+      zip: int
+    Person = object
+      name: string
+      age: int
+      address: Address
+      tags: seq[string]
+      nickname: Option[string]
+
+  test "schemaFor derives a matching validator":
+    let s = schemaFor(Person)
+    check s.safeParse("""
+      {"name":"d","age":20,"address":{"city":"x","zip":1},"tags":["a"]}""").ok
+
+  test "Option fields are optional, the rest required":
+    let s = schemaFor(Person)
+    check s.safeParse("""
+      {"name":"d","age":1,"address":{"city":"x","zip":1},"tags":[]}""").ok   # nickname absent is fine
+    check s.safeParse("""{"name":"d"}""").hasLine("age: required")
+
+  test "nested type errors keep their path":
+    let s = schemaFor(Person)
+    let r = s.safeParse("""
+      {"name":"d","age":1,"address":{"city":"x","zip":"NaN"},"tags":[]}""")
+    check r.hasLine("address.zip: expected integer")
+
+  test "fromJson returns a typed value":
+    let p = fromJson(Person, """
+      {"name":"Delfin","age":20,"address":{"city":"Mex","zip":1000},"tags":["nim","zod"]}""")
+    check p.name == "Delfin"
+    check p.age == 20
+    check p.address.city == "Mex"
+    check p.tags == @["nim", "zod"]
+    check p.nickname.isNone
+
+  test "fromJson raises BouncerError on a bad shape":
+    expect BouncerError:
+      discard fromJson(Person, """{"name":"d","age":"not a number"}""")
+
 suite "rendering":
   test "path string formats keys and indices":
     let r = arr(obj({"tags": arr(str())})).safeParse("""[{"tags":["ok", 3]}]""")

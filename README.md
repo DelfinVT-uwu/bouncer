@@ -84,6 +84,10 @@ arr(str())  .min(n) .max(n) .nonEmpty()
 # running it
 schema.safeParse(node | text)       # never raises; returns ParseResult
 schema.parse(node | text)           # returns the cleaned value, or raises BouncerError
+
+# from a Nim type
+schemaFor(MyType)                   # derive a schema from the type's shape
+fromJson(MyType, node | text)       # validate the shape, return a typed MyType
 ```
 
 ## Deriving one schema from another
@@ -108,9 +112,34 @@ let signup = user.pick(["name", "password"])
 user or ship it as an API response. Errors are collected, not fail-fast: one parse reports
 everything that's wrong.
 
+## From a Nim type
+
+Already have a type? Derive the schema from it, or validate and deserialize in one step:
+
+```nim
+type
+  Address = object
+    city: string
+    zip:  int
+  User = object
+    name:     string
+    age:      int
+    address:  Address
+    nickname: Option[string]   # optional
+
+let u = fromJson(User, body)   # a typed User, or BouncerError with .issues
+
+let s = schemaFor(User)        # just the schema — compose rules onto it
+let adult = s.extend({ "age": integer().min(18) })
+```
+
+`schemaFor` maps `string`→`str()`, `int`→`integer()`, `Option[x]`→optional, `seq[x]`→an
+array, and nested objects recursively. `fromJson` checks the shape (bouncer errors, with
+paths) and hands back a typed value.
+
 ## Not here yet
 
-No macro to derive a schema from a Nim `object` type — maybe next.
+Unions, dates, and attaching rules through type pragmas — maybe later.
 
 ## License
 
