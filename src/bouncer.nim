@@ -1,11 +1,14 @@
 ## bouncer — Zod-style schema validation for Nim.
 ##
 ## Build a schema as a value, then parse untrusted data (JSON, forms, config)
-## against it. You get back either the validated data or a list of issues, each
-## with the exact path where it failed.
+## against it. You get back the cleaned-up data or a list of issues, each with the
+## exact path where it failed.
+##
+## `std/json` is re-exported, so `import bouncer` alone gives you `%`, `getInt`,
+## `JsonNode` and friends.
 ##
 ## ```nim
-## import bouncer, std/json
+## import bouncer
 ##
 ## let user = obj({
 ##   "name":  str().min(3).max(50),
@@ -22,5 +25,6 @@
 ##                       # age: must be >= 18
 ## ```
 
+import std/json
 import bouncer/core
-export core
+export json, core

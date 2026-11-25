@@ -68,18 +68,19 @@ ParseResult = object variante { ok: bool }:
 BouncerError = object of CatchableError: issues: seq[Issue]
 ```
 
-## Alcance v0.1
+## Alcance v0.1 (hecho)
 
-- Escalares: `str` (min/max/email/pattern/oneOf), `integer` y `number` (min/max), `boolean`.
-- Compuestos: `obj({...})` (con modo `strict` para rechazar claves extra) y `arr(elem)`.
-- `optional` para campos ausentes o `null`.
-- `refine(fn, msg)` para reglas propias.
-- `safeParse` / `parse`, errores con ruta y código, `$` legible.
-- Tests desde el día 1.
+- Escalares: `str` (min/max/nonEmpty/trim/email/url/uuid/pattern/oneOf),
+  `integer` y `number` (min/max/positive/nonNegative/coerce), `boolean` (coerce).
+- Compuestos: `obj({...})` (con `strict`) y `arr(elem)` (min/max/nonEmpty).
+- `optional`, `default(valor)`, `coerce`, `transform(fn)`, `refine(fn, msg)`.
+- Al parsear se devuelve el valor **limpio**: trimmeado, coercionado, defaults puestos,
+  claves desconocidas descartadas.
+- `safeParse` / `parse`, errores con ruta y código, `$` legible. `std/json` re-exportado.
+- Suite de tests (29).
 
-## Después de v0.1 (no ahora)
+## Después (no ahora)
 
-- `transform` (coerción: string→int, trim) y `coerce`.
 - Composición: `partial`, `pick`, `omit`, `extend`, `merge`.
 - Capa macro: derivar un `Schema` desde un `object` de Nim y parsear directo a ese tipo.
 - Uniones (`oneOfSchema`), `record`, fechas.

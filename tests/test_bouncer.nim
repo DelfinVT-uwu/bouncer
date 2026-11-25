@@ -127,6 +127,47 @@ suite "refine and parse":
     let r = obj({"a": integer()}).safeParse("{ not json ")
     check r.hasLine("invalid JSON")
 
+suite "cleanup and coercion":
+  test "trim: value comes back trimmed, and bounds see the trimmed length":
+    let r = str().trim().min(2).safeParse(%"  hi  ")
+    check r.ok
+    check r.value.getStr == "hi"
+
+  test "coerce: strings become the target type":
+    check integer().coerce().safeParse(%"42").value.getInt == 42
+    check number().coerce().safeParse(%"3.14").value.getFloat == 3.14
+    check boolean().coerce().safeParse(%"true").value.getBool == true
+    check integer().coerce().safeParse(%"nope").hasLine("expected integer")
+
+  test "default: fills a missing or null field":
+    let s = obj({"page": integer().default(1), "q": str().optional()})
+    check s.safeParse("{}").value["page"].getInt == 1
+    check s.safeParse("""{"page":5}""").value["page"].getInt == 5
+    check s.safeParse("""{"page":null}""").value["page"].getInt == 1
+
+  test "transform: reshapes the value after it validates":
+    let shout = str().transform(proc(n: JsonNode): JsonNode = %n.getStr.toUpperAscii)
+    check shout.safeParse(%"hi").value.getStr == "HI"
+
+  test "unknown keys are dropped from the cleaned output":
+    let s = obj({"a": integer()})
+    let r = s.safeParse("""{"a":1,"b":2}""")
+    check r.ok
+    check not r.value.hasKey("b")
+
+suite "more validators":
+  test "url and uuid":
+    check str().url().safeParse(%"https://nim-lang.org").ok
+    check str().url().safeParse(%"nim-lang.org").hasLine("valid URL")
+    check str().uuid().safeParse(%"550e8400-e29b-41d4-a716-446655440000").ok
+    check str().uuid().safeParse(%"not-a-uuid").hasLine("valid UUID")
+
+  test "positive, nonNegative, nonEmpty":
+    check integer().positive().safeParse(%0).hasLine("must be positive")
+    check number().nonNegative().safeParse(%(-1.0)).hasLine("zero or greater")
+    check str().nonEmpty().safeParse(%"").hasLine("at least 1")
+    check arr(integer()).nonEmpty().safeParse("[]").hasLine("at least 1")
+
 suite "rendering":
   test "path string formats keys and indices":
     let r = arr(obj({"tags": arr(str())})).safeParse("""[{"tags":["ok", 3]}]""")

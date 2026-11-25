@@ -2,7 +2,7 @@
 
 Schema validation for Nim, in the style of [Zod](https://zod.dev). Describe the shape
 your data should have, then run untrusted input — a JSON body, a form, a config file —
-through it. You get back the validated data, or every reason it failed and where.
+through it. You get back the data cleaned up, or every reason it failed and where.
 
 ```nim
 import bouncer
@@ -40,26 +40,45 @@ nimble install bouncer
 
 Nim 2.0+, no external dependencies.
 
+## Cleaning up on the way through
+
+A valid parse doesn't just pass — it hands back a tidied value: strings trimmed, strings
+coerced to numbers, defaults filled in, unknown keys dropped. Handy for form and query
+data, where everything arrives as text:
+
+```nim
+let query = obj({
+  "page":  integer().coerce().default(1),   # "page=2" -> 2, missing -> 1
+  "term":  str().trim().optional()          # "  nim " -> "nim"
+})
+
+query.parse("""{"page":"2","term":"  nim ","junk":"x"}""")
+# {"page": 2, "term": "nim"}   — coerced, trimmed, "junk" dropped
+```
+
 ## API
 
 ```nim
 # scalars
-str()      .min(n) .max(n) .email() .pattern(r"…") .oneOf(["a", "b"])
-integer()  .min(n) .max(n)
-number()   .min(x) .max(x)          # int or float
-boolean()
+str()      .min(n) .max(n) .nonEmpty() .trim()
+           .email() .url() .uuid() .pattern(r"…") .oneOf(["a", "b"])
+integer()  .min(n) .max(n) .positive() .nonNegative() .coerce()
+number()   .min(x) .max(x) .positive() .nonNegative() .coerce()   # int or float
+boolean()  .coerce()
 
 # composites
 obj({ "k": str(), … })              # add strict = true to reject unknown keys
-arr(str())  .min(n) .max(n)
+arr(str())  .min(n) .max(n) .nonEmpty()
 
-# modifiers, on any schema
+# on any schema
 .optional()                         # value may be missing or null
+.default(value)                     # fill in when missing or null
 .refine(proc(n: JsonNode): bool … , "message")
+.transform(proc(n: JsonNode): JsonNode … )   # reshape after it validates
 
 # running it
 schema.safeParse(node | text)       # never raises; returns ParseResult
-schema.parse(node | text)           # returns data, or raises BouncerError
+schema.parse(node | text)           # returns the cleaned value, or raises BouncerError
 ```
 
 `ParseResult.ok` says which path you got: read `.value` or `.issues`. Each `Issue` has a
@@ -69,9 +88,8 @@ everything that's wrong.
 
 ## Not here yet
 
-No coercion (`transform`), no composition helpers (`partial`/`pick`/`omit`), and no macro
-to derive a schema from a Nim `object`. See [docs/DESIGN.md](docs/DESIGN.md). This is v0.1:
-the validation core, tested.
+No schema composition helpers (`partial`/`pick`/`omit`), and no macro to derive a schema
+from a Nim `object` type. See [docs/DESIGN.md](docs/DESIGN.md) for where it's headed.
 
 ## License
 

@@ -1,5 +1,6 @@
 ## Schema model and validation engine. A `Schema` is one variant object; a single
-## `validate` walks the `case`. Builders return a `Schema` you keep chaining.
+## `run` walks the `case`, returning the issues found and the cleaned-up value.
+## Builders return a `Schema` you keep chaining.
 
 import std/[json, options, tables, strutils, re]
 
@@ -28,22 +29,29 @@ type
     check: proc (node: JsonNode): bool {.closure.}
     message: string
 
+  Transform = proc (node: JsonNode): JsonNode {.closure.}
+
   SchemaKind = enum
     skString, skInt, skFloat, skBool, skObject, skArray
 
   Schema* = ref object
     optional: bool
+    coerceInput: bool
+    defaultVal: Option[JsonNode]
     refinements: seq[Refinement]
+    transforms: seq[Transform]
     case kind: SchemaKind
     of skString:
       minLen, maxLen: Option[int]
-      isEmail: bool
+      isEmail, isUrl, isUuid, doTrim: bool
       pattern: Option[Regex]
       enumVals: seq[string]
     of skInt:
       imin, imax: Option[int]
+      intPositive, intNonNeg: bool
     of skFloat:
       fmin, fmax: Option[float]
+      numPositive, numNonNeg: bool
     of skBool:
       discard
     of skObject:
@@ -60,6 +68,8 @@ type
     case ok*: bool
     of true:  value*: JsonNode
     of false: issues*: seq[Issue]
+
+let uuidShape = re"(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 func typeLabel(k: SchemaKind): string =
   case k
@@ -96,6 +106,9 @@ func looksLikeEmail(s: string): bool =
   let dot = domain.rfind('.')
   dot > 0 and dot < domain.high
 
+func looksLikeUrl(s: string): bool =
+  (s.startsWith("http://") or s.startsWith("https://")) and '.' in s and s.len > 11
+
 func pathString*(path: seq[PathPart]): string =
   ## "user.email", "items[2].name", "" at the root.
   for i, p in path:
@@ -109,28 +122,56 @@ func `$`*(issue: Issue): string =
   let p = pathString(issue.path)
   if p.len == 0: issue.message else: p & ": " & issue.message
 
-proc validate(s: Schema, node: JsonNode, path: seq[PathPart]): seq[Issue] =
-  # Missing or null is fine when optional, a type error otherwise.
+proc coerced(s: Schema, node: JsonNode): JsonNode =
+  # Best-effort input coercion from a JSON string, for data that arrives as text
+  # (query params, form fields). On failure the original node is returned so the
+  # normal type check reports it.
+  if not s.coerceInput or node.isNil or node.kind != JString: return node
+  let raw = node.getStr.strip
+  case s.kind
+  of skInt:
+    try: newJInt(parseInt(raw)) except ValueError: node
+  of skFloat:
+    try: newJFloat(parseFloat(raw)) except ValueError: node
+  of skBool:
+    case raw.toLowerAscii
+    of "true": newJBool(true)
+    of "false": newJBool(false)
+    else: node
+  else: node
+
+proc run(s: Schema, input: JsonNode, path: seq[PathPart]): (seq[Issue], JsonNode) =
+  var issues: seq[Issue]
+  var node = s.coerced(input)
+
+  # Missing or null is fine when optional, a type error otherwise. Objects handle
+  # their own missing fields (default / omit) before they ever call this.
   if node.isNil or node.kind == JNull:
     if not s.optional:
-      result.add issue(path, icInvalidType, "expected " & typeLabel(s.kind) & ", got null")
-    return
+      issues.add issue(path, icInvalidType, "expected " & typeLabel(s.kind) & ", got null")
+    return (issues, node)
 
   case s.kind
   of skString:
     if node.kind != JString:
-      return @[issue(path, icInvalidType, "expected string, got " & jsonLabel(node))]
-    let v = node.getStr
+      return (@[issue(path, icInvalidType, "expected string, got " & jsonLabel(node))], node)
+    var v = node.getStr
+    if s.doTrim: v = v.strip
     if s.minLen.isSome and v.len < s.minLen.get:
-      result.add issue(path, icTooSmall, "must be at least " & $s.minLen.get & " characters")
+      issues.add issue(path, icTooSmall, "must be at least " & $s.minLen.get & " characters")
     if s.maxLen.isSome and v.len > s.maxLen.get:
-      result.add issue(path, icTooBig, "must be at most " & $s.maxLen.get & " characters")
+      issues.add issue(path, icTooBig, "must be at most " & $s.maxLen.get & " characters")
     if s.isEmail and not looksLikeEmail(v):
-      result.add issue(path, icInvalidString, "must be a valid email")
+      issues.add issue(path, icInvalidString, "must be a valid email")
+    if s.isUrl and not looksLikeUrl(v):
+      issues.add issue(path, icInvalidString, "must be a valid URL")
+    if s.isUuid and not v.contains(uuidShape):
+      issues.add issue(path, icInvalidString, "must be a valid UUID")
     if s.pattern.isSome and not v.contains(s.pattern.get):
-      result.add issue(path, icInvalidString, "does not match the required pattern")
+      issues.add issue(path, icInvalidString, "does not match the required pattern")
     if s.enumVals.len > 0 and v notin s.enumVals:
-      result.add issue(path, icInvalidEnum, "must be one of: " & s.enumVals.join(", "))
+      issues.add issue(path, icInvalidEnum, "must be one of: " & s.enumVals.join(", "))
+    node = newJString(v)
 
   of skInt:
     var v: int
@@ -141,66 +182,91 @@ proc validate(s: Schema, node: JsonNode, path: seq[PathPart]): seq[Issue] =
       # JSON doesn't separate 18 from 18.0; accept a whole-number float as an integer.
       let f = node.getFloat
       if f < int.low.float or f > int.high.float or f != f.int.float:
-        return @[issue(path, icInvalidType, "expected integer, got number")]
+        return (@[issue(path, icInvalidType, "expected integer, got number")], node)
       v = f.int
+      node = newJInt(v)
     else:
-      return @[issue(path, icInvalidType, "expected integer, got " & jsonLabel(node))]
+      return (@[issue(path, icInvalidType, "expected integer, got " & jsonLabel(node))], node)
     if s.imin.isSome and v < s.imin.get:
-      result.add issue(path, icTooSmall, "must be >= " & $s.imin.get)
+      issues.add issue(path, icTooSmall, "must be >= " & $s.imin.get)
     if s.imax.isSome and v > s.imax.get:
-      result.add issue(path, icTooBig, "must be <= " & $s.imax.get)
+      issues.add issue(path, icTooBig, "must be <= " & $s.imax.get)
+    if s.intPositive and v <= 0:
+      issues.add issue(path, icTooSmall, "must be positive")
+    if s.intNonNeg and v < 0:
+      issues.add issue(path, icTooSmall, "must be zero or greater")
 
   of skFloat:
     if node.kind notin {JInt, JFloat}:
-      return @[issue(path, icInvalidType, "expected number, got " & jsonLabel(node))]
+      return (@[issue(path, icInvalidType, "expected number, got " & jsonLabel(node))], node)
     let v = node.getFloat
     if s.fmin.isSome and v < s.fmin.get:
-      result.add issue(path, icTooSmall, "must be >= " & $s.fmin.get)
+      issues.add issue(path, icTooSmall, "must be >= " & $s.fmin.get)
     if s.fmax.isSome and v > s.fmax.get:
-      result.add issue(path, icTooBig, "must be <= " & $s.fmax.get)
+      issues.add issue(path, icTooBig, "must be <= " & $s.fmax.get)
+    if s.numPositive and v <= 0:
+      issues.add issue(path, icTooSmall, "must be positive")
+    if s.numNonNeg and v < 0:
+      issues.add issue(path, icTooSmall, "must be zero or greater")
 
   of skBool:
     if node.kind != JBool:
-      return @[issue(path, icInvalidType, "expected boolean, got " & jsonLabel(node))]
+      return (@[issue(path, icInvalidType, "expected boolean, got " & jsonLabel(node))], node)
 
   of skObject:
     if node.kind != JObject:
-      return @[issue(path, icInvalidType, "expected object, got " & jsonLabel(node))]
+      return (@[issue(path, icInvalidType, "expected object, got " & jsonLabel(node))], node)
+    var cleaned = newJObject()
     for name, sub in s.shape:
-      if node.hasKey(name):
-        result.add validate(sub, node[name], path & key(name))
+      if node.hasKey(name) and node[name].kind != JNull:
+        let (childIssues, childValue) = run(sub, node[name], path & key(name))
+        issues.add childIssues
+        cleaned[name] = childValue
+      elif sub.defaultVal.isSome:
+        cleaned[name] = sub.defaultVal.get
       elif not sub.optional:
-        result.add issue(path & key(name), icRequired, "required")
+        issues.add issue(path & key(name), icRequired, "required")
     if s.strict:
       for name, _ in node:
         if name notin s.shape:
-          result.add issue(path & key(name), icUnrecognized, "unexpected key")
+          issues.add issue(path & key(name), icUnrecognized, "unexpected key")
+    node = cleaned  # unknown keys are dropped from the output
 
   of skArray:
     if node.kind != JArray:
-      return @[issue(path, icInvalidType, "expected array, got " & jsonLabel(node))]
+      return (@[issue(path, icInvalidType, "expected array, got " & jsonLabel(node))], node)
     if s.amin.isSome and node.len < s.amin.get:
-      result.add issue(path, icTooSmall, "must have at least " & $s.amin.get & " items")
+      issues.add issue(path, icTooSmall, "must have at least " & $s.amin.get & " items")
     if s.amax.isSome and node.len > s.amax.get:
-      result.add issue(path, icTooBig, "must have at most " & $s.amax.get & " items")
+      issues.add issue(path, icTooBig, "must have at most " & $s.amax.get & " items")
+    var cleaned = newJArray()
     for i, el in node.getElems:
-      result.add validate(s.elem, el, path & idx(i))
+      let (childIssues, childValue) = run(s.elem, el, path & idx(i))
+      issues.add childIssues
+      cleaned.add childValue
+    node = cleaned
 
-  # Custom rules run only once the value is otherwise valid, so a refinement never
-  # has to re-check the type it was handed.
-  if result.len == 0:
+  # Custom rules and transforms run only once the value is otherwise valid, so a
+  # refinement never has to re-check the type it was handed.
+  if issues.len == 0:
     for r in s.refinements:
       if not r.check(node):
-        result.add issue(path, icCustom, r.message)
+        issues.add issue(path, icCustom, r.message)
+    if issues.len == 0:
+      for t in s.transforms:
+        node = t(node)
+
+  (issues, node)
 
 proc safeParse*(s: Schema, node: JsonNode): ParseResult =
-  ## Validate `node`. Never raises; check `.ok`, then read `.value` or `.issues`.
-  let issues = validate(s, node, @[])
-  if issues.len == 0: ParseResult(ok: true, value: node)
+  ## Validate `node`. Never raises; check `.ok`, then read `.value` (cleaned up:
+  ## trimmed, coerced, unknown keys dropped) or `.issues`.
+  let (issues, value) = s.run(node, @[])
+  if issues.len == 0: ParseResult(ok: true, value: value)
   else: ParseResult(ok: false, issues: issues)
 
 proc safeParse*(s: Schema, jsonText: string): ParseResult =
-  ## Parse the JSON text first; a malformed body becomes an issue instead of an exception.
+  ## Parse the JSON text first; a malformed body becomes an issue, not an exception.
   var node: JsonNode
   try:
     node = parseJson(jsonText)
@@ -216,7 +282,7 @@ proc raiseInvalid(issues: seq[Issue]) {.noreturn.} =
   raise e
 
 proc parse*(s: Schema, node: JsonNode): JsonNode =
-  ## Validate and return the data, or raise `BouncerError` carrying `.issues`.
+  ## Validate and return the cleaned-up data, or raise `BouncerError` with `.issues`.
   let r = s.safeParse(node)
   if r.ok: r.value else: raiseInvalid(r.issues)
 
@@ -237,6 +303,27 @@ func obj*(shape: openArray[(string, Schema)], strict = false): Schema =
 
 proc optional*(s: Schema): Schema =
   s.optional = true; s
+
+proc default*(s: Schema, value: JsonNode): Schema =
+  ## Fill in this value when the field is missing or null.
+  s.defaultVal = some value; s
+
+proc default*(s: Schema, value: int): Schema = s.default(%value)
+proc default*(s: Schema, value: float): Schema = s.default(%value)
+proc default*(s: Schema, value: string): Schema = s.default(%value)
+proc default*(s: Schema, value: bool): Schema = s.default(%value)
+
+proc coerce*(s: Schema): Schema =
+  ## Accept a string and convert it: "42" -> integer, "3.14" -> number, "true" -> boolean.
+  s.coerceInput = true; s
+
+proc refine*(s: Schema, check: proc (node: JsonNode): bool {.closure.},
+             message = "failed a custom check"): Schema =
+  s.refinements.add Refinement(check: check, message: message); s
+
+proc transform*(s: Schema, fn: proc (node: JsonNode): JsonNode {.closure.}): Schema =
+  ## Reshape the value after it validates. Runs on the cleaned-up node.
+  s.transforms.add fn; s
 
 proc min*(s: Schema, n: int): Schema =
   case s.kind
@@ -264,9 +351,42 @@ proc max*(s: Schema, n: float): Schema =
   doAssert s.kind == skFloat, "max(float) only applies to number()"
   s.fmax = some n; s
 
+proc nonEmpty*(s: Schema): Schema =
+  case s.kind
+  of skString: s.minLen = some 1
+  of skArray:  s.amin = some 1
+  else: raise newException(ValueError, "nonEmpty() only applies to str() and arr()")
+  s
+
+proc positive*(s: Schema): Schema =
+  case s.kind
+  of skInt:   s.intPositive = true
+  of skFloat: s.numPositive = true
+  else: raise newException(ValueError, "positive() only applies to integer() and number()")
+  s
+
+proc nonNegative*(s: Schema): Schema =
+  case s.kind
+  of skInt:   s.intNonNeg = true
+  of skFloat: s.numNonNeg = true
+  else: raise newException(ValueError, "nonNegative() only applies to integer() and number()")
+  s
+
 proc email*(s: Schema): Schema =
   doAssert s.kind == skString, "email() only applies to str()"
   s.isEmail = true; s
+
+proc url*(s: Schema): Schema =
+  doAssert s.kind == skString, "url() only applies to str()"
+  s.isUrl = true; s
+
+proc uuid*(s: Schema): Schema =
+  doAssert s.kind == skString, "uuid() only applies to str()"
+  s.isUuid = true; s
+
+proc trim*(s: Schema): Schema =
+  doAssert s.kind == skString, "trim() only applies to str()"
+  s.doTrim = true; s
 
 proc pattern*(s: Schema, regex: string): Schema =
   doAssert s.kind == skString, "pattern() only applies to str()"
@@ -275,7 +395,3 @@ proc pattern*(s: Schema, regex: string): Schema =
 proc oneOf*(s: Schema, values: openArray[string]): Schema =
   doAssert s.kind == skString, "oneOf() only applies to str()"
   s.enumVals = @values; s
-
-proc refine*(s: Schema, check: proc (node: JsonNode): bool {.closure.},
-             message = "failed a custom check"): Schema =
-  s.refinements.add Refinement(check: check, message: message); s
