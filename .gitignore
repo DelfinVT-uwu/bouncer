@@ -1,0 +1,10 @@
+# Nim build artifacts
+nimcache/
+*.exe
+bouncer_tests
+tests/test_bouncer
+# compiled test binary (built next to its source by `nim c -r`)
+tests/test_*[!.]*
+!tests/*.nim
+# nimble
+.nimble/
