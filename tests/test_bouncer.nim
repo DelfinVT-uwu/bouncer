@@ -36,6 +36,10 @@ suite "scalars":
     check integer().safeParse(%"7").hasLine("expected integer, got string")
     check integer().min(0).max(10).safeParse(%5).ok
 
+  test "integer: a whole-number float counts (JSON sends 18 and 18.0 the same)":
+    check integer().min(18).safeParse(%18.0).ok
+    check integer().safeParse(%18.5).hasLine("expected integer, got number")
+
   test "number: accepts ints and floats":
     check number().min(1.5).safeParse(%2).ok       # JSON int is a valid number
     check number().safeParse(%3.14).ok
