@@ -107,8 +107,8 @@ proc runInner(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue],
       return (@[issue(path, icInvalidType, "expected object, got " & jsonLabel(node))], node)
     var cleaned = newJObject()
     for name, sub in s.shape:
-      if node.hasKey(name):
-        let val = node[name]
+      let val = node{name}                      # one lookup, nil if the key is absent
+      if val != nil:
         if val.kind != JNull:
           path.add key(name)
           let (childIssues, childValue) = run(sub, val, path)

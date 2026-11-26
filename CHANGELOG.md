@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.0
+- First stable release. The API is settled.
+- Object validation does one field lookup instead of two (`hasKey` + `[]` → a single
+  `{}`), a few percent off the hot path.
+
 ## 0.8.0
 - A failed `union` now reports the errors of the variant that came closest, instead
   of a generic "didn't match" — so a discriminated union points right at the bad field.
