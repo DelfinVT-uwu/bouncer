@@ -1,8 +1,9 @@
 # bouncer
 
 ![tests](https://github.com/DelfinVT-uwu/bouncer/actions/workflows/tests.yml/badge.svg)
-![nimble](https://img.shields.io/nimble/v/bouncer)
+![version](https://img.shields.io/github/v/tag/DelfinVT-uwu/bouncer?label=version)
 ![Nim](https://img.shields.io/badge/Nim-2.0%2B-f3d400.svg)
+![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20macOS%20%7C%20Windows-blue)
 ![license](https://img.shields.io/badge/license-MIT-blue.svg)
 
 Schema validation for Nim, in the style of [Zod](https://zod.dev). Describe the shape
