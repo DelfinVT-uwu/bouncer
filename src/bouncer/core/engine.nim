@@ -197,19 +197,23 @@ proc runInner(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue],
       return (@[issue(path, icInvalidType, "must be " & $s.litVal)], node)
 
   of skUnion:
-    if s.optional and (node.isNil or node.kind == JNull):
-      discard                                   # an optional union lets null through
+    if (s.optional or s.allowNull) and (node.isNil or node.kind == JNull):
+      discard                                   # an optional/nullable union lets null through
     else:
       var matched = false
+      var closest: seq[Issue]
       for v in s.variants:
         let (vIssues, vValue) = run(v, input, path)
         if vIssues.len == 0:
           node = vValue                         # keep the winning branch's clean value
           matched = true
           break
+        if closest.len == 0 or vIssues.len < closest.len:
+          closest = vIssues                     # the variant that came nearest to matching
       if not matched:
-        return (@[issue(path, icInvalidType,
-          "did not match any of the " & $s.variants.len & " allowed types")], node)
+        # Surface that closest variant's own errors — for a discriminated union
+        # (a literal tag per variant) this points right at the real problem.
+        return (closest, node)
 
   # Custom rules and transforms run only once the value is otherwise valid, so a
   # refinement never has to re-check the type it was handed.

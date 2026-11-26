@@ -184,7 +184,15 @@ suite "literals and unions":
     let id = union(integer(), str().uuid())
     check id.safeParse(%7).ok
     check id.safeParse(%"550e8400-e29b-41d4-a716-446655440000").ok
-    check id.safeParse(%"nope").hasLine("did not match any")
+    check not id.safeParse(%"nope").ok
+
+  test "a failed union surfaces the closest variant's error":
+    let event = union(
+      obj({"kind": literal("click"), "x": integer()}),
+      obj({"kind": literal("key"),   "code": str()})
+    )
+    # kind=click matched its tag, so we see the real error, not a generic miss
+    check event.safeParse("""{"kind":"click","x":"bad"}""").hasLine("x: expected integer")
 
   test "union hands back the winning branch's cleaned value":
     let s = union(integer().coerce(), boolean())

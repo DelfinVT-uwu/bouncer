@@ -50,6 +50,8 @@ nimble install bouncer
 
 Nim 2.0+, no Nimble dependencies. Tested on Linux, macOS and Windows.
 
+A runnable example lives in [`examples/signup.nim`](examples/signup.nim).
+
 ## Cleaning up on the way through
 
 A valid parse doesn't just pass — it hands back a tidied value: strings trimmed, strings
