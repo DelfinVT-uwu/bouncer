@@ -19,7 +19,9 @@ proc coerced(s: Schema, node: JsonNode): JsonNode =
     else: node
   else: node
 
-proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], JsonNode) =
+proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], JsonNode)
+
+proc runInner(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], JsonNode) =
   # `path` is one buffer shared down the whole walk: each level pushes its key or
   # index, recurses, then pops. We only ever copy it when an issue is actually made
   # (issue() snapshots it), so a valid parse builds no paths at all.
@@ -117,12 +119,16 @@ proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], Json
           cleaned[name] = newJNull()          # null is a valid value: keep it
         elif sub.defaultVal.isSome:
           cleaned[name] = sub.defaultVal.get
+        elif sub.catchVal.isSome:
+          cleaned[name] = sub.catchVal.get
         elif not sub.optional:
           path.add key(name)
           issues.add issue(path, icRequired, "required")
           path.setLen(path.len - 1)
       elif sub.defaultVal.isSome:              # key absent
         cleaned[name] = sub.defaultVal.get
+      elif sub.catchVal.isSome:
+        cleaned[name] = sub.catchVal.get
       elif not sub.optional:
         path.add key(name)
         issues.add issue(path, icRequired, "required")
@@ -216,6 +222,12 @@ proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], Json
         node = t(node)
 
   (issues, node)
+
+proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], JsonNode) =
+  ## Validate the schema, then let catch() swallow any failure for a fallback value.
+  result = runInner(s, input, path)
+  if result[0].len > 0 and s.catchVal.isSome:
+    result = (newSeq[Issue](), s.catchVal.get)
 
 proc safeParse*(s: Schema, node: JsonNode): ParseResult =
   ## Validate `node`. Never raises; check `.ok`, then read `.value` (cleaned up:

@@ -36,6 +36,7 @@ type
     allowNull: bool
     coerceInput: bool
     defaultVal: Option[JsonNode]
+    catchVal: Option[JsonNode]
     refinements: seq[Refinement]
     transforms: seq[Transform]
     case kind: SchemaKind

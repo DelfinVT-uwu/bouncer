@@ -37,6 +37,7 @@ proc clone(s: Schema): Schema =
   result.allowNull = s.allowNull
   result.coerceInput = s.coerceInput
   result.defaultVal = s.defaultVal
+  result.catchVal = s.catchVal
   result.refinements = s.refinements
   result.transforms = s.transforms
 

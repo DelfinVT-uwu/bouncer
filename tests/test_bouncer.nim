@@ -204,6 +204,24 @@ suite "literals and unions":
     check s.safeParse("""{"note":null}""").ok
     check s.safeParse("{}").ok
 
+suite "catch":
+  test "fallback when a present value fails":
+    check str().catch("n/a").safeParse(%42).value.getStr == "n/a"
+    check integer().catch(0).safeParse(%"bad").value.getInt == 0
+
+  test "a valid value passes through untouched":
+    check str().catch("n/a").safeParse(%"ok").value.getStr == "ok"
+
+  test "catch on an object field, for bad, null, or missing":
+    let s = obj({"age": integer().catch(0)})
+    check s.safeParse("""{"age":"oops"}""").value["age"].getInt == 0
+    check s.safeParse("""{"age":null}""").value["age"].getInt == 0
+    check s.safeParse("{}").value["age"].getInt == 0
+
+  test "catch wraps a whole schema that fails its type":
+    let s = obj({"a": integer()}).catch(%*{"a": 0})
+    check s.safeParse("[]").value["a"].getInt == 0
+
 suite "null handling":
   test "nullable: null is a valid value and is kept":
     let s = obj({"nick": str().nullable()})

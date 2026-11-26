@@ -60,6 +60,17 @@ proc default*(s: Schema, value: float): Schema = s.default(%value)
 proc default*(s: Schema, value: string): Schema = s.default(%value)
 proc default*(s: Schema, value: bool): Schema = s.default(%value)
 
+proc catch*(s: Schema, value: JsonNode): Schema =
+  ## If validation fails, hand back this value instead of an error. Unlike
+  ## default(), which only fills a missing or null field, catch() also swallows a
+  ## present value that doesn't pass.
+  s.catchVal = some value; s
+
+proc catch*(s: Schema, value: int): Schema = s.catch(%value)
+proc catch*(s: Schema, value: float): Schema = s.catch(%value)
+proc catch*(s: Schema, value: string): Schema = s.catch(%value)
+proc catch*(s: Schema, value: bool): Schema = s.catch(%value)
+
 proc coerce*(s: Schema): Schema =
   ## Accept a string and convert it: "42" -> integer, "3.14" -> number, "true" -> boolean.
   s.coerceInput = true; s
