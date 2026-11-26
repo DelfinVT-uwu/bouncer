@@ -29,7 +29,7 @@ type
   Transform = proc (node: JsonNode): JsonNode {.closure.}
 
   SchemaKind = enum
-    skString, skInt, skFloat, skBool, skObject, skArray, skLiteral, skUnion, skRecord
+    skString, skInt, skFloat, skBool, skObject, skArray, skLiteral, skUnion, skRecord, skTuple
 
   Schema* = ref object
     optional: bool
@@ -63,6 +63,9 @@ type
       variants: seq[Schema]
     of skRecord:
       valueSchema: Schema
+    of skTuple:
+      items: seq[Schema]
+      rest: Schema               # nil = longitud exacta; si no, la cola variádica
 
   BouncerError* = object of CatchableError
     issues*: seq[Issue]
@@ -83,6 +86,7 @@ func typeLabel(k: SchemaKind): string =
   of skLiteral: "value"
   of skUnion:  "value"
   of skRecord: "object"
+  of skTuple:  "array"
 
 func jsonLabel(n: JsonNode): string =
   if n.isNil: return "null"

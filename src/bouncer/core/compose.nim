@@ -30,6 +30,9 @@ proc clone(s: Schema): Schema =
     for v in s.variants: result.variants.add v.clone()
   of skRecord:
     result = Schema(kind: skRecord, valueSchema: s.valueSchema.clone())
+  of skTuple:
+    result = Schema(kind: skTuple, rest: (if s.rest.isNil: nil else: s.rest.clone()))
+    for it in s.items: result.items.add it.clone()
   result.optional = s.optional
   result.coerceInput = s.coerceInput
   result.defaultVal = s.defaultVal

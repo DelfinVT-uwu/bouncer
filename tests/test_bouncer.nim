@@ -204,6 +204,30 @@ suite "literals and unions":
     check s.safeParse("""{"note":null}""").ok
     check s.safeParse("{}").ok
 
+suite "tuples":
+  test "fixed length, one schema per position":
+    let point = tup([integer(), integer()])
+    check point.safeParse("[1,2]").ok
+    check point.safeParse("""[1,"x"]""").hasLine("[1]: expected integer, got string")
+
+  test "wrong length is reported":
+    let pair = tup([str(), integer()])
+    check pair.safeParse("""["a"]""").hasLine("must have exactly 2 items")
+    check pair.safeParse("""["a",1,2]""").hasLine("must have exactly 2 items")
+
+  test "rest allows a variadic tail":
+    let t = tup([str()], rest = integer())
+    check t.safeParse("""["a",1,2,3]""").ok
+    check t.safeParse("""["a"]""").ok                       # la cola puede estar vacía
+    check t.safeParse("""["a","b"]""").hasLine("[1]: expected integer")
+    check t.safeParse("[]").hasLine("must have at least 1 item")
+
+  test "positions come back cleaned":
+    let t = tup([integer().coerce(), str().trim()])
+    let r = t.safeParse("""["5","  hi  "]""")
+    check r.value[0].getInt == 5
+    check r.value[1].getStr == "hi"
+
 suite "records":
   test "a map of string keys to one value schema":
     let scores = record(integer().min(0))

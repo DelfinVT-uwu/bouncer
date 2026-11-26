@@ -24,6 +24,13 @@ func record*(valueSchema: Schema): Schema =
   ## ahead of time; use `obj()` when they are.
   Schema(kind: skRecord, valueSchema: valueSchema)
 
+func tup*(items: openArray[Schema], rest: Schema = nil): Schema =
+  ## Una tupla: un array de longitud fija con un esquema por posición, como
+  ## `[str(), integer()]`. Pasa `rest` para permitir elementos extra al final,
+  ## todos del mismo esquema. (Se llama `tup` porque `tuple` es palabra reservada.)
+  result = Schema(kind: skTuple, rest: rest)
+  result.items = @items
+
 func union*(variants: varargs[Schema]): Schema =
   ## Match if any one of the variants does. The first that passes wins, and its
   ## cleaned-up value is what you get back. Put a `literal()` field in each object

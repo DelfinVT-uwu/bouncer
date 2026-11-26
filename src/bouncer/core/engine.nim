@@ -141,6 +141,29 @@ proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], Json
       cleaned.add childValue
     node = cleaned
 
+  of skTuple:
+    if node.kind != JArray:
+      return (@[issue(path, icInvalidType, "expected array, got " & jsonLabel(node))], node)
+    let got = node.len
+    if s.rest.isNil:
+      if got != s.items.len:
+        issues.add issue(path, (if got < s.items.len: icTooSmall else: icTooBig),
+          "must have exactly " & $s.items.len & " items")
+    elif got < s.items.len:
+      issues.add issue(path, icTooSmall, "must have at least " & $s.items.len & " items")
+    var cleaned = newJArray()
+    for i, el in node.getElems:
+      let sub = if i < s.items.len: s.items[i] else: s.rest
+      if sub.isNil:                    # extra sin rest: ya se reportó por longitud
+        cleaned.add el
+        continue
+      path.add idx(i)
+      let (childIssues, childValue) = run(sub, el, path)
+      path.setLen(path.len - 1)
+      issues.add childIssues
+      cleaned.add childValue
+    node = cleaned
+
   of skRecord:
     if node.kind != JObject:
       return (@[issue(path, icInvalidType, "expected object, got " & jsonLabel(node))], node)
