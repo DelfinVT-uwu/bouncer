@@ -204,6 +204,29 @@ suite "literals and unions":
     check s.safeParse("""{"note":null}""").ok
     check s.safeParse("{}").ok
 
+suite "null handling":
+  test "nullable: null is a valid value and is kept":
+    let s = obj({"nick": str().nullable()})
+    let r = s.safeParse("""{"nick":null}""")
+    check r.ok
+    check r.value["nick"].kind == JNull        # se conserva, no se descarta
+    check s.safeParse("""{"nick":"uwu"}""").ok
+
+  test "nullable alone still requires the key to be present":
+    let s = obj({"nick": str().nullable()})
+    check s.safeParse("{}").hasLine("nick: required")
+
+  test "nullish: missing or null, both fine":
+    let s = obj({"nick": str().nullish()})
+    check s.safeParse("{}").ok
+    check s.safeParse("""{"nick":null}""").ok
+    check s.safeParse("""{"nick":"x"}""").ok
+
+  test "nullable at the top level and inside arrays":
+    check str().nullable().safeParse(%newJNull()).ok
+    check arr(str().nullable()).safeParse("""["a",null,"b"]""").ok
+    check arr(str()).safeParse("""["a",null]""").hasLine("[1]: expected string, got null")
+
 suite "tuples":
   test "fixed length, one schema per position":
     let point = tup([integer(), integer()])

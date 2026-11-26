@@ -34,6 +34,7 @@ proc clone(s: Schema): Schema =
     result = Schema(kind: skTuple, rest: (if s.rest.isNil: nil else: s.rest.clone()))
     for it in s.items: result.items.add it.clone()
   result.optional = s.optional
+  result.allowNull = s.allowNull
   result.coerceInput = s.coerceInput
   result.defaultVal = s.defaultVal
   result.refinements = s.refinements

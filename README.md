@@ -82,7 +82,9 @@ tup([str(), integer()])             # fixed-length array, one schema per positio
 union(a, b, …)                      # matches if any variant does
 
 # on any schema
-.optional()                         # value may be missing or null
+.optional()                         # the key may be missing
+.nullable()                         # the value may be null (kept in the output)
+.nullish()                          # missing or null
 .default(value)                     # fill in when missing or null
 .refine(proc(n: JsonNode): bool … , "message")
 .transform(proc(n: JsonNode): JsonNode … )   # reshape after it validates

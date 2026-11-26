@@ -39,7 +39,17 @@ func union*(variants: varargs[Schema]): Schema =
   Schema(kind: skUnion, variants: @variants)
 
 proc optional*(s: Schema): Schema =
+  ## The key may be missing. (bouncer also tolerates a present null as absent.)
   s.optional = true; s
+
+proc nullable*(s: Schema): Schema =
+  ## The value may be null, and a null is kept in the output. Unlike optional(),
+  ## which is about the key being absent, this is about the value being null.
+  s.allowNull = true; s
+
+proc nullish*(s: Schema): Schema =
+  ## optional() + nullable(): the key may be missing, or present and null.
+  s.optional = true; s.allowNull = true; s
 
 proc default*(s: Schema, value: JsonNode): Schema =
   ## Fill in this value when the field is missing or null.

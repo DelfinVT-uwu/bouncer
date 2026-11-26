@@ -33,6 +33,7 @@ type
 
   Schema* = ref object
     optional: bool
+    allowNull: bool
     coerceInput: bool
     defaultVal: Option[JsonNode]
     refinements: seq[Refinement]

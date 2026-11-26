@@ -30,7 +30,7 @@ proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], Json
   # their own missing fields (default / omit) before they ever call this. Union and
   # literal decide for themselves what null means, so they skip this.
   if s.kind notin {skUnion, skLiteral} and (node.isNil or node.kind == JNull):
-    if not s.optional:
+    if not (s.optional or s.allowNull):
       issues.add issue(path, icInvalidType, "expected " & typeLabel(s.kind) & ", got null")
     return (issues, node)
 
@@ -105,13 +105,23 @@ proc run(s: Schema, input: JsonNode, path: var seq[PathPart]): (seq[Issue], Json
       return (@[issue(path, icInvalidType, "expected object, got " & jsonLabel(node))], node)
     var cleaned = newJObject()
     for name, sub in s.shape:
-      if node.hasKey(name) and node[name].kind != JNull:
-        path.add key(name)
-        let (childIssues, childValue) = run(sub, node[name], path)
-        path.setLen(path.len - 1)
-        issues.add childIssues
-        cleaned[name] = childValue
-      elif sub.defaultVal.isSome:
+      if node.hasKey(name):
+        let val = node[name]
+        if val.kind != JNull:
+          path.add key(name)
+          let (childIssues, childValue) = run(sub, val, path)
+          path.setLen(path.len - 1)
+          issues.add childIssues
+          cleaned[name] = childValue
+        elif sub.allowNull:
+          cleaned[name] = newJNull()          # null is a valid value: keep it
+        elif sub.defaultVal.isSome:
+          cleaned[name] = sub.defaultVal.get
+        elif not sub.optional:
+          path.add key(name)
+          issues.add issue(path, icRequired, "required")
+          path.setLen(path.len - 1)
+      elif sub.defaultVal.isSome:              # key absent
         cleaned[name] = sub.defaultVal.get
       elif not sub.optional:
         path.add key(name)
