@@ -27,6 +27,11 @@ if not r.ok:
 # age: must be >= 18
 ```
 
+`ParseResult.ok` says which path you got: read `.value` or `.issues`. Each `Issue` has a
+`path`, a stable `code` (`icTooSmall`, `icRequired`, …) and a message — render it for a
+user or ship it as an API response. Errors are collected, not fail-fast: one parse reports
+everything that's wrong.
+
 ## Why
 
 External data — off a network, from a user, out of a file — is untrusted until something
@@ -119,11 +124,6 @@ let public = user.omit(["password"])   # what you send back to clients
 let update = user.partial()            # a PATCH body: every field optional
 let signup = user.pick(["name", "password"])
 ```
-
-`ParseResult.ok` says which path you got: read `.value` or `.issues`. Each `Issue` has a
-`path`, a stable `code` (`icTooSmall`, `icRequired`, …) and a message — render it for a
-user or ship it as an API response. Errors are collected, not fail-fast: one parse reports
-everything that's wrong.
 
 ## One of several shapes
 
